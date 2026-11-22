@@ -1,12 +1,21 @@
+export function getSupabasePublicKey(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    undefined
+  );
+}
+
 export function isSupabaseConfigured(): boolean {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = getSupabasePublicKey();
   return Boolean(
     url &&
       key &&
       url.startsWith("http") &&
       !url.includes("YOUR-PROJECT") &&
-      !key.includes("YOUR_SUPABASE_ANON_KEY")
+      !key.includes("YOUR_SUPABASE_ANON_KEY") &&
+      !key.includes("YOUR_SUPABASE_PUBLISHABLE_KEY")
   );
 }
 

@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { isSupabaseConfigured } from "./supabase/mock";
+import { getSupabasePublicKey, isSupabaseConfigured } from "./supabase/mock";
 
 export interface Product {
   id: string;
@@ -50,11 +50,11 @@ function getSupabaseAdminClient() {
 
 function getSupabasePublicClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!isSupabaseConfigured() || !url || !anonKey) {
+  const publicKey = getSupabasePublicKey();
+  if (!isSupabaseConfigured() || !url || !publicKey) {
     return null;
   }
-  return createSupabaseClient(url, anonKey, {
+  return createSupabaseClient(url, publicKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
