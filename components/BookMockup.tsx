@@ -1,0 +1,3 @@
+export default function BookMockup({title="Le petit papillon doré",subtitle="Une histoire merveilleuse"}:{title?:string;subtitle?:string}) {
+ return <div className="book3d" aria-label={`Couverture 3D : ${title}`}><div className="bookSpine"/><div className="bookPages"/><div className="bookCover"><small>✦ LE MONDE DES PETITS LIVRES ✦</small><strong>{title}</strong><span style={{fontSize:48}}>🦋</span><small>{subtitle}</small></div></div>;
+}
