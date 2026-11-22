@@ -59,10 +59,16 @@ function getSupabasePublicClient() {
   });
 }
 
-export function sanitizeHttpUrl(raw: unknown): string | null {
+const SAFE_DATA_IMAGE_RE = /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i;
+const MAX_COVER_DATA_URL_LENGTH = 1_500_000;
+
+export function sanitizeCoverUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
+  if (SAFE_DATA_IMAGE_RE.test(trimmed) && trimmed.length <= MAX_COVER_DATA_URL_LENGTH) {
+    return trimmed;
+  }
   try {
     const parsed = new URL(trimmed);
     if (parsed.protocol === "https:" || parsed.protocol === "http:") {
@@ -98,9 +104,12 @@ export function validateProductPayload(body: unknown): { ok: true; data: Product
 
   let cover_url: string | null = null;
   if (typeof b.cover_url === "string" && b.cover_url.trim().length > 0) {
-    const clean = sanitizeHttpUrl(b.cover_url);
+    const clean = sanitizeCoverUrl(b.cover_url);
     if (!clean) {
-      return { ok: false, error: "L'URL de couverture doit commencer par https:// ou http://." };
+      return {
+        ok: false,
+        error: "Image de couverture invalide (importez un fichier JPG/PNG/WebP ou une URL https://).",
+      };
     }
     cover_url = clean;
   }
@@ -121,25 +130,34 @@ export function validateProductPayload(body: unknown): { ok: true; data: Product
 }
 
 export async function listAvailableProducts(): Promise<Product[]> {
-  const supabase = getSupabaseAdminClient() || getSupabasePublicClient();
-  if (supabase) {
+  const memoryAvailable = getMemoryStore().filter((p) => p.is_available);
+  const adminClient = getSupabaseAdminClient();
+  const client = adminClient || getSupabasePublicClient();
+
+  if (client) {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await client
         .from("products")
         .select("*")
         .eq("is_available", true)
         .order("created_at", { ascending: false })
         .limit(9);
       if (!error && Array.isArray(data)) {
-        return data as Product[];
+        if (adminClient) {
+          return data as Product[];
+        }
+        const seen = new Set(memoryAvailable.map((p) => p.id));
+        const merged = [
+          ...memoryAvailable,
+          ...(data as Product[]).filter((p) => !seen.has(p.id)),
+        ];
+        return merged.slice(0, 9);
       }
     } catch {
       // Fallback to in-memory store
     }
   }
-  return getMemoryStore()
-    .filter((p) => p.is_available)
-    .slice(0, 9);
+  return memoryAvailable.slice(0, 9);
 }
 
 export async function listAllProducts(): Promise<Product[]> {

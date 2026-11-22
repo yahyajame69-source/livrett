@@ -29,7 +29,7 @@ export default async function Home() {
           <div className="eyebrow">Des livres pour rêver et apprendre</div>
           <h1>Ouvrez la porte à un monde merveilleux.</h1>
           <p>Des histoires captivantes et des livrets éducatifs imaginés pour éveiller la curiosité, nourrir l'imagination et accompagner les enfants dans leurs découvertes.</p>
-          <a className="btn" href="#boutique">Découvrir la boutique　→</a>
+          <a className="btn" href="#boutique">Découvrir la boutique →</a>
         </div>
         <div className="heroArt"><BookMockup/></div>
       </div>

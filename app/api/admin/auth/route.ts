@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
     }
 
     const token = signAdminSessionToken();
-    const res = NextResponse.json({ ok: true });
+    const res = NextResponse.json({ ok: true, token });
     res.headers.set("Set-Cookie", buildSessionSetCookieHeader(req, token));
     return res;
   }
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
   clearFailedAttempts(clientKey);
   const token = signAdminSessionToken();
-  const res = NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true, token });
   res.headers.set("Set-Cookie", buildSessionSetCookieHeader(req, token));
   return res;
 }

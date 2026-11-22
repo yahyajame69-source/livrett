@@ -180,9 +180,20 @@ export function isAdminAuthenticatedFromCookies(): boolean {
   return verifyAdminSessionToken(token);
 }
 
+export function extractBearerToken(req: NextRequest): string | null {
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader) return null;
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
 export function isAdminAuthenticatedFromRequest(req: NextRequest): boolean {
-  const token = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
-  return verifyAdminSessionToken(token);
+  const bearer = extractBearerToken(req);
+  if (bearer && verifyAdminSessionToken(bearer)) {
+    return true;
+  }
+  const cookieToken = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  return verifyAdminSessionToken(cookieToken);
 }
 
 export function verifySameOriginRequest(req: NextRequest): boolean {
@@ -200,8 +211,9 @@ export function verifySameOriginRequest(req: NextRequest): boolean {
 }
 
 export function buildSessionSetCookieHeader(req: NextRequest, token: string, maxAge = SESSION_TTL_SECONDS): string {
+  const fwdProto = (req.headers.get("x-forwarded-proto") || "").toLowerCase();
   const isHttps =
-    req.headers.get("x-forwarded-proto") === "https" ||
+    fwdProto.includes("https") ||
     req.nextUrl.protocol === "https:";
   const base = `${ADMIN_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly`;
   if (isHttps) {

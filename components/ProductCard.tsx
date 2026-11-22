@@ -1,9 +1,16 @@
 import BookMockup from "./BookMockup";
 
-function getSafeImageUrl(raw: unknown): string | null {
+const SAFE_DATA_IMAGE_RE = /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i;
+
+function getSafeCoverUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (SAFE_DATA_IMAGE_RE.test(trimmed)) {
+    return trimmed;
+  }
   try {
-    const u = new URL(raw.trim());
+    const u = new URL(trimmed);
     if (u.protocol === "https:" || u.protocol === "http:") {
       return u.toString();
     }
@@ -18,26 +25,12 @@ export default function ProductCard({ product }: { product: any }) {
   const message = encodeURIComponent(
     `Bonjour, je souhaite commander : ${product.title} (prix : ${product.price} ${product.currency || "DJF"}).`
   );
-  const safeCover = getSafeImageUrl(product.cover_url);
+  const safeCover = getSafeCoverUrl(product.cover_url);
 
   return (
     <article className="product">
       <div className="coverStage">
-        {safeCover ? (
-          <img
-            src={safeCover}
-            alt={product.title}
-            referrerPolicy="no-referrer"
-            style={{
-              height: "90%",
-              maxWidth: "90%",
-              objectFit: "contain",
-              filter: "drop-shadow(10px 12px 10px #0003)",
-            }}
-          />
-        ) : (
-          <BookMockup title={product.title} />
-        )}
+        <BookMockup title={product.title} coverUrl={safeCover} />
       </div>
       <h3>{product.title}</h3>
       <p className="muted">{product.description || "Un livre merveilleux à découvrir."}</p>
