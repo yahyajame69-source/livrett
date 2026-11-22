@@ -1,2 +1,14 @@
-import {redirect} from "next/navigation"; import {createClient} from "@/lib/supabase/server"; import AdminPanel from "@/components/AdminPanel";
-export default async function Admin(){const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)redirect("/connexion");const {data:profile}=await supabase.from("profiles").select("role").eq("id",user.id).single();if(profile?.role!=="admin")return <main className="admin"><div className="wrap panel"><h1>Accès non autorisé</h1><p>Ce compte ne possède pas les droits administrateur.</p></div></main>;const {data:products}=await supabase.from("products").select("*").order("created_at",{ascending:false});return <AdminPanel products={products||[]}/>;}
+import { redirect } from "next/navigation";
+import { isAdminAuthenticatedFromCookies } from "@/lib/admin-auth";
+import { listAllProducts } from "@/lib/products-store";
+import AdminPanel from "@/components/AdminPanel";
+
+export const dynamic = "force-dynamic";
+
+export default async function Admin() {
+  if (!isAdminAuthenticatedFromCookies()) {
+    redirect("/connexion");
+  }
+  const products = await listAllProducts();
+  return <AdminPanel products={products} />;
+}

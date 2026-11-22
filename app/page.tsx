@@ -1,14 +1,14 @@
 import Link from "next/link";
 import BookMockup from "@/components/BookMockup";
-import {createClient} from "@/lib/supabase/server";
 import ProductCard from "@/components/ProductCard";
 import ConstellationCanvas from "@/components/ConstellationCanvas";
 import SecretAdminDot from "@/components/SecretAdminDot";
+import { listAvailableProducts } from "@/lib/products-store";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
- let products:any[]=[];
- try { const supabase=await createClient(); const {data}=await supabase.from("products").select("*").eq("is_available",true).order("created_at",{ascending:false}).limit(9); products=data||[]; } catch {}
- const demo = products;
+ const demo = await listAvailableProducts();
  return <>
   <header className="topbar">
     <ConstellationCanvas variant="header" />
