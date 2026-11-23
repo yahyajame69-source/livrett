@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEFAULT_AUTHOR_PROFILE, type AuthorProfile } from "@/lib/author-defaults";
 import type { SupabaseSyncStatus } from "@/lib/products-store";
 import { useAdminSession } from "./AdminSessionProvider";
 import AdminPanel from "./AdminPanel";
@@ -10,16 +11,19 @@ export default function AdminGate({
   initialAuthenticated,
   initialProducts,
   initialSyncStatus,
+  initialAuthor,
 }: {
   initialAuthenticated: boolean;
   initialProducts: any[];
   initialSyncStatus: SupabaseSyncStatus | null;
+  initialAuthor: AuthorProfile | null;
 }) {
   const { token, clearToken } = useAdminSession();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(initialAuthenticated);
   const [products, setProducts] = useState<any[]>(initialProducts);
   const [syncStatus, setSyncStatus] = useState<SupabaseSyncStatus | null>(initialSyncStatus);
+  const [author, setAuthor] = useState<AuthorProfile>(initialAuthor || DEFAULT_AUTHOR_PROFILE);
   const [checking, setChecking] = useState(!initialAuthenticated);
 
   useEffect(() => {
@@ -35,23 +39,31 @@ export default function AdminGate({
     }
 
     let active = true;
-    fetch("/api/admin/products", {
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(async (res) => {
+    Promise.all([
+      fetch("/api/admin/products", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+      fetch("/api/admin/author", {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${token}` },
+      }),
+    ])
+      .then(async ([prodRes, authRes]) => {
         if (!active) return;
-        if (!res.ok) {
+        if (!prodRes.ok) {
           clearToken();
           router.replace("/connexion");
           return;
         }
-        const data = await res.json().catch(() => ({}));
+        const prodData = await prodRes.json().catch(() => ({}));
+        const authData = authRes.ok ? await authRes.json().catch(() => ({})) : {};
         if (!active) return;
-        setProducts(Array.isArray(data.products) ? data.products : []);
-        setSyncStatus(data.syncStatus || null);
+        setProducts(Array.isArray(prodData.products) ? prodData.products : []);
+        setSyncStatus(prodData.syncStatus || null);
+        if (authData?.author) {
+          setAuthor(authData.author);
+        }
         setAuthorized(true);
         setChecking(false);
       })
@@ -81,5 +93,11 @@ export default function AdminGate({
     );
   }
 
-  return <AdminPanel products={products} initialSyncStatus={syncStatus} />;
+  return (
+    <AdminPanel
+      products={products}
+      initialSyncStatus={syncStatus}
+      initialAuthor={author}
+    />
+  );
 }

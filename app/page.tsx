@@ -1,14 +1,18 @@
 import Link from "next/link";
-import BookMockup from "@/components/BookMockup";
+import AuthorShowcase3D from "@/components/AuthorShowcase3D";
 import ProductCard from "@/components/ProductCard";
 import ConstellationCanvas from "@/components/ConstellationCanvas";
 import SecretAdminDot from "@/components/SecretAdminDot";
+import { getAuthorProfile } from "@/lib/author-store";
 import { listAvailableProducts } from "@/lib/products-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
- const demo = await listAvailableProducts();
+ const [demo, author] = await Promise.all([
+  listAvailableProducts(),
+  Promise.resolve(getAuthorProfile()),
+ ]);
  return <>
   <header className="topbar">
     <ConstellationCanvas variant="header" />
@@ -31,7 +35,7 @@ export default async function Home() {
           <p>Des histoires captivantes et des livrets éducatifs imaginés pour éveiller la curiosité, nourrir l'imagination et accompagner les enfants dans leurs découvertes.</p>
           <a className="btn" href="#boutique">Découvrir la boutique →</a>
         </div>
-        <div className="heroArt"><BookMockup/></div>
+        <div className="heroArt"><AuthorShowcase3D author={author} /></div>
       </div>
     </section>
     <section className="section" id="boutique"><div className="wrap"><div className="sectionHead"><div className="eyebrow">Notre sélection</div><h2>Des livres à découvrir</h2><p>Choisissez une histoire et faites entrer la magie à la maison.</p></div><div className="products">{demo.length ? demo.map((p:any)=><ProductCard key={p.id} product={p}/>) : <div className="panel" style={{gridColumn:"1 / -1",textAlign:"center"}}><h3>Notre collection arrive bientôt</h3><p className="muted">Les premiers livres seront présentés ici dès leur publication.</p></div>}</div></div></section>
