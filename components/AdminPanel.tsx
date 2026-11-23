@@ -3,7 +3,8 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ImagePlus, Trash2, Upload } from "lucide-react";
+import { Check, Copy, Database, ImagePlus, RefreshCw, Trash2, Upload } from "lucide-react";
+import type { SupabaseSyncStatus } from "@/lib/products-store";
 import { useAdminSession } from "./AdminSessionProvider";
 import BookMockup from "./BookMockup";
 
@@ -11,6 +12,24 @@ const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_RAW_BYTES = 12 * 1024 * 1024;
 const TARGET_W = 540;
 const TARGET_H = 960;
+
+const SETUP_SQL = `create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  price numeric(10,2) not null default 0 check (price >= 0),
+  currency text not null default 'DJF',
+  age_range text,
+  cover_url text,
+  stock integer not null default 0 check (stock >= 0),
+  is_available boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.products enable row level security;
+drop policy if exists "products_public_read_available" on public.products;
+create policy "products_public_read_available" on public.products
+  for select to anon, authenticated using (is_available = true);
+notify pgrst, 'reload schema';`;
 
 async function processCoverFileTo9x16(file: File): Promise<string> {
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
@@ -66,8 +85,17 @@ async function processCoverFileTo9x16(file: File): Promise<string> {
   }
 }
 
-export default function AdminPanel({ products }: { products: any[] }) {
+export default function AdminPanel({
+  products,
+  initialSyncStatus = null,
+}: {
+  products: any[];
+  initialSyncStatus?: SupabaseSyncStatus | null;
+}) {
   const [items, setItems] = useState(products);
+  const [syncStatus, setSyncStatus] = useState<SupabaseSyncStatus | null>(initialSyncStatus);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [coverUrl, setCoverUrl] = useState<string>("");
   const [titlePreview, setTitlePreview] = useState<string>("");
@@ -96,6 +124,58 @@ export default function AdminPanel({ products }: { products: any[] }) {
     }
     return headers;
   };
+
+  async function copySetupSql() {
+    try {
+      await navigator.clipboard.writeText(SETUP_SQL);
+      setCopiedSql(true);
+      setTimeout(() => setCopiedSql(false), 2500);
+    } catch {
+      setIsError(false);
+      setMessage("Ouvrez « Afficher le script SQL » ci-dessous pour le copier manuellement.");
+    }
+  }
+
+  async function syncToSupabase() {
+    setSyncing(true);
+    setMessage("");
+    setIsError(false);
+    try {
+      const res = await fetch("/api/admin/supabase-sync", {
+        method: "POST",
+        headers: authHeaders(false),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.syncStatus) {
+        setSyncStatus(data.syncStatus);
+      }
+      if (Array.isArray(data.products)) {
+        setItems(data.products);
+      }
+      if (!res.ok) {
+        if (res.status === 401) {
+          clearToken();
+          router.push("/connexion");
+          return;
+        }
+        setIsError(true);
+        setMessage(data.error || "La table public.products n'est pas encore accessible sur Supabase.");
+        return;
+      }
+      setIsError(false);
+      setMessage(
+        data.syncedCount > 0
+          ? `Synchronisation Supabase réussie (${data.syncedCount} livre(s) transféré(s)).`
+          : "Connexion Supabase vérifiée : la table public.products est active."
+      );
+      router.refresh();
+    } catch {
+      setIsError(true);
+      setMessage("Erreur réseau lors de la vérification Supabase.");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function handleFileSelected(file: File | null | undefined) {
     if (!file) return;
@@ -156,6 +236,10 @@ export default function AdminPanel({ products }: { products: any[] }) {
         return;
       }
 
+      if (data.syncStatus) {
+        setSyncStatus(data.syncStatus);
+      }
+
       const listRes = await fetch("/api/admin/products", {
         cache: "no-store",
         headers: authHeaders(false),
@@ -163,6 +247,9 @@ export default function AdminPanel({ products }: { products: any[] }) {
       if (listRes.ok) {
         const listData = await listRes.json().catch(() => ({}));
         setItems(listData.products || []);
+        if (listData.syncStatus) {
+          setSyncStatus(listData.syncStatus);
+        }
       }
       if (!editing?.id) {
         form.reset();
@@ -171,7 +258,11 @@ export default function AdminPanel({ products }: { products: any[] }) {
       setCoverUrl("");
       setTitlePreview("");
       setIsError(false);
-      setMessage("Produit enregistré.");
+      setMessage(
+        data.storedLocally
+          ? "Livre enregistré et affiché sur la boutique (sauvegarde locale en attente de la table Supabase)."
+          : "Produit enregistré."
+      );
       router.refresh();
     } catch {
       setIsError(true);
@@ -248,6 +339,11 @@ export default function AdminPanel({ products }: { products: any[] }) {
     setTitlePreview("");
   };
 
+  const showSqlHelper = Boolean(syncStatus?.configured && !syncStatus.tableReady);
+  const showServiceRoleHelper = Boolean(
+    syncStatus?.configured && syncStatus.tableReady && !syncStatus.hasServiceRole
+  );
+
   return (
     <main className="admin">
       <div className="wrap">
@@ -268,11 +364,60 @@ export default function AdminPanel({ products }: { products: any[] }) {
             </button>
           </div>
         </div>
+
+        {showSqlHelper && (
+          <div className="notice" style={{ marginTop: 18 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <Database size={18} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+              <div style={{ flex: 1 }}>
+                <strong>Table Supabase `public.products` en attente de création</strong>
+                <p style={{ margin: "6px 0 12px", lineHeight: 1.5 }}>
+                  Vos livres sont enregistrés localement sur le serveur et s'affichent déjà sur la boutique sans erreur. Pour activer la synchronisation Supabase, exécutez ce script dans <strong>Supabase → SQL Editor → Run</strong>, puis cliquez sur <strong>Vérifier et synchroniser</strong>.
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn outline"
+                    style={{ padding: "8px 14px", fontSize: 12 }}
+                    onClick={copySetupSql}
+                  >
+                    {copiedSql ? <Check size={14} style={{ marginRight: 6 }} /> : <Copy size={14} style={{ marginRight: 6 }} />}
+                    {copiedSql ? "Script SQL copié" : "Copier le script SQL"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ padding: "8px 14px", fontSize: 12 }}
+                    disabled={syncing}
+                    onClick={syncToSupabase}
+                  >
+                    <RefreshCw size={14} style={{ marginRight: 6 }} />
+                    {syncing ? "Vérification…" : "Vérifier et synchroniser"}
+                  </button>
+                </div>
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+                    Afficher le script SQL
+                  </summary>
+                  <pre className="sqlPreview">{SETUP_SQL}</pre>
+                </details>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showServiceRoleHelper && (
+          <div className="notice" style={{ marginTop: 18 }}>
+            <strong>Clé serveur `SUPABASE_SERVICE_ROLE_KEY` manquante :</strong> la table `public.products` est bien prête, mais ajoutez `SUPABASE_SERVICE_ROLE_KEY` dans vos Secrets pour que l'administration écrive directement dans Supabase (en attendant, vos ajouts sont sauvegardés localement).
+          </div>
+        )}
+
         {message && (
-          <p className={isError ? "errorBox" : "notice"} role="status">
+          <p className={isError ? "errorBox" : "notice"} style={{ marginTop: 18 }} role="status">
             {message}
           </p>
         )}
+
         <div className="row" style={{ margin: "22px 0" }}>
           <div className="panel">
             <div className="muted">Produits enregistrés</div>

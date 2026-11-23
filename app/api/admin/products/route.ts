@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticatedFromRequest, verifySameOriginRequest } from "@/lib/admin-auth";
-import { createProduct, listAllProducts, validateProductPayload } from "@/lib/products-store";
+import {
+  createProduct,
+  getSupabaseSyncStatus,
+  listAllProducts,
+  validateProductPayload,
+} from "@/lib/products-store";
 
 export async function GET(req: NextRequest) {
   if (!isAdminAuthenticatedFromRequest(req)) {
     return NextResponse.json({ error: "Non autorisé." }, { status: 401 });
   }
-  const products = await listAllProducts();
-  return NextResponse.json({ products });
+  const [products, syncStatus] = await Promise.all([
+    listAllProducts(),
+    getSupabaseSyncStatus(),
+  ]);
+  return NextResponse.json({ products, syncStatus });
 }
 
 export async function POST(req: NextRequest) {
@@ -34,5 +42,9 @@ export async function POST(req: NextRequest) {
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
-  return NextResponse.json({ product: result.data }, { status: 201 });
+  const syncStatus = await getSupabaseSyncStatus();
+  return NextResponse.json(
+    { product: result.data, storedLocally: Boolean(result.storedLocally), syncStatus },
+    { status: 201 }
+  );
 }

@@ -63,4 +63,6 @@
 .coverPreview3d .bookCoverFallback strong{font-size:13px}
 .coverPreview3d .bookCoverFallback small{font-size:8px}
 .srOnlyInput{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.sqlPreview{margin:10px 0 0;padding:12px;border-radius:10px;background:#101b33;color:#f8e2a3;font-size:12px;line-height:1.5;overflow-x:auto;white-space:pre-wrap}
 @media(max-width:560px){.coverUploadLayout{grid-template-columns:1fr}}
+

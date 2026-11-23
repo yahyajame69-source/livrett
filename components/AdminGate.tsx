@@ -2,20 +2,24 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { SupabaseSyncStatus } from "@/lib/products-store";
 import { useAdminSession } from "./AdminSessionProvider";
 import AdminPanel from "./AdminPanel";
 
 export default function AdminGate({
   initialAuthenticated,
   initialProducts,
+  initialSyncStatus,
 }: {
   initialAuthenticated: boolean;
   initialProducts: any[];
+  initialSyncStatus: SupabaseSyncStatus | null;
 }) {
   const { token, clearToken } = useAdminSession();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(initialAuthenticated);
   const [products, setProducts] = useState<any[]>(initialProducts);
+  const [syncStatus, setSyncStatus] = useState<SupabaseSyncStatus | null>(initialSyncStatus);
   const [checking, setChecking] = useState(!initialAuthenticated);
 
   useEffect(() => {
@@ -47,6 +51,7 @@ export default function AdminGate({
         const data = await res.json().catch(() => ({}));
         if (!active) return;
         setProducts(Array.isArray(data.products) ? data.products : []);
+        setSyncStatus(data.syncStatus || null);
         setAuthorized(true);
         setChecking(false);
       })
@@ -76,5 +81,5 @@ export default function AdminGate({
     );
   }
 
-  return <AdminPanel products={products} />;
+  return <AdminPanel products={products} initialSyncStatus={syncStatus} />;
 }
