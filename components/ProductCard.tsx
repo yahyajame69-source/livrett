@@ -21,7 +21,7 @@ function getSafeCoverUrl(raw: unknown): string | null {
 }
 
 export default function ProductCard({ product }: { product: any }) {
-  const number = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "25377531900";
+  const number = process.env.NEXT_PUBLIC_WHATSAPP_ORDER_NUMBER || "25377840307";
   const message = encodeURIComponent(
     `Bonjour, je souhaite commander : ${product.title} (prix : ${product.price} ${product.currency || "DJF"}).`
   );
