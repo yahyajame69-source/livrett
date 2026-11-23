@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticatedFromRequest, verifySameOriginRequest } from "@/lib/admin-auth";
 import {
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
   const syncStatus = await getSupabaseSyncStatus();
+  revalidatePath("/");
+  revalidatePath("/admin");
   return NextResponse.json(
     { product: result.data, storedLocally: Boolean(result.storedLocally), syncStatus },
     { status: 201 }

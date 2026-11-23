@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticatedFromRequest, verifySameOriginRequest } from "@/lib/admin-auth";
 import { deleteProduct, updateProduct, validateProductPayload } from "@/lib/products-store";
@@ -34,6 +35,8 @@ export async function PATCH(
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 404 });
   }
+  revalidatePath("/");
+  revalidatePath("/admin");
   return NextResponse.json({ product: result.data });
 }
 
@@ -57,5 +60,7 @@ export async function DELETE(
   if (result.error) {
     return NextResponse.json({ error: result.error }, { status: 404 });
   }
+  revalidatePath("/");
+  revalidatePath("/admin");
   return NextResponse.json({ ok: true });
 }

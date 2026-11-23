@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImagePlus, RotateCcw, Trash2, Upload, UserCheck } from "lucide-react";
 import {
@@ -404,9 +403,9 @@ export default function AdminPanel({
             </p>
           </div>
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <Link className="btn outline" href="/">
+            <a className="btn outline" href="/">
               Voir la boutique
-            </Link>
+            </a>
             <button type="button" className="btn outline" disabled={busy} onClick={logout}>
               Déconnexion
             </button>

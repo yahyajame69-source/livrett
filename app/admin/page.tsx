@@ -4,6 +4,7 @@ import { getSupabaseSyncStatus, listAllProducts } from "@/lib/products-store";
 import AdminGate from "@/components/AdminGate";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function Admin() {
   const cookieAuthed = isAdminAuthenticatedFromCookies();

@@ -7,6 +7,7 @@ import { getAuthorProfile } from "@/lib/author-store";
 import { listAvailableProducts } from "@/lib/products-store";
 
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function Home() {
  const [demo, author] = await Promise.all([

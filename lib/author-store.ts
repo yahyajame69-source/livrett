@@ -89,8 +89,13 @@ function writeAuthorToDisk(profile: AuthorProfile): void {
 }
 
 export function getAuthorProfile(): AuthorProfile {
+  const fromDisk = readAuthorFromDisk();
+  if (fromDisk) {
+    globalForAuthor.__lmdplAuthorProfile = fromDisk;
+    return fromDisk;
+  }
   if (!globalForAuthor.__lmdplAuthorProfile) {
-    globalForAuthor.__lmdplAuthorProfile = readAuthorFromDisk() || { ...DEFAULT_AUTHOR_PROFILE };
+    globalForAuthor.__lmdplAuthorProfile = { ...DEFAULT_AUTHOR_PROFILE };
   }
   return globalForAuthor.__lmdplAuthorProfile;
 }

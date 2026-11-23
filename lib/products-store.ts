@@ -73,8 +73,13 @@ function writeLocalProductsToDisk(items: Product[]): void {
 }
 
 function getLocalStore(): Product[] {
+  const fromDisk = readLocalProductsFromDisk();
+  if (fromDisk.length > 0 || fs.existsSync(LOCAL_PRODUCTS_FILE)) {
+    globalForProducts.__lmdplProductsStore = fromDisk;
+    return fromDisk;
+  }
   if (!globalForProducts.__lmdplProductsStore) {
-    globalForProducts.__lmdplProductsStore = readLocalProductsFromDisk();
+    globalForProducts.__lmdplProductsStore = [];
   }
   return globalForProducts.__lmdplProductsStore;
 }
@@ -88,6 +93,9 @@ function isPublishableServiceKey(key: string | undefined): boolean {
   return Boolean(key && key.trim().startsWith("sb_publishable_"));
 }
 
+const noStoreFetch: typeof fetch = (input, init) =>
+  fetch(input, { ...init, cache: "no-store" });
+
 function getSupabaseAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -96,6 +104,7 @@ function getSupabaseAdminClient() {
   }
   return createSupabaseClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: noStoreFetch },
   });
 }
 
@@ -107,6 +116,7 @@ function getSupabasePublicClient() {
   }
   return createSupabaseClient(url, publicKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: noStoreFetch },
   });
 }
 

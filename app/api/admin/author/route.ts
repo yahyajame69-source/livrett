@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticatedFromRequest, verifySameOriginRequest } from "@/lib/admin-auth";
 import { getAuthorProfile, saveAuthorProfile, validateAuthorPayload } from "@/lib/author-store";
@@ -31,5 +32,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const author = saveAuthorProfile(parsed.data);
+  revalidatePath("/");
+  revalidatePath("/admin");
   return NextResponse.json({ author });
 }

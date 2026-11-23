@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminAuthenticatedFromRequest, verifySameOriginRequest } from "@/lib/admin-auth";
 import {
@@ -35,6 +36,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  revalidatePath("/");
+  revalidatePath("/admin");
   return NextResponse.json({
     ok: true,
     syncedCount: result.syncedCount,
