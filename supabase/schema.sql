@@ -18,8 +18,9 @@ create table if not exists public.products (
 );
 alter table public.profiles enable row level security;
 alter table public.products enable row level security;
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
 grant select on table public.products to anon, authenticated;
+grant all on table public.products to service_role;
 create policy "profiles_select_own" on public.profiles for select to authenticated using (auth.uid()=id);
 create policy "products_public_read_available" on public.products for select to anon, authenticated using (is_available=true);
 create policy "admin_read_all_products" on public.products for select to authenticated using (exists(select 1 from public.profiles p where p.id=auth.uid() and p.role='admin'));

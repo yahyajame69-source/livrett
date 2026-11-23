@@ -33,6 +33,8 @@ export interface SupabaseSyncStatus {
   hasServiceRole: boolean;
   tableReady: boolean;
   localCount: number;
+  permissionDenied?: boolean;
+  keyLooksPublishable?: boolean;
 }
 
 const DATA_DIR = path.resolve(process.cwd(), ".data");
@@ -82,10 +84,14 @@ function saveLocalStore(items: Product[]): void {
   writeLocalProductsToDisk(items);
 }
 
+function isPublishableServiceKey(key: string | undefined): boolean {
+  return Boolean(key && key.trim().startsWith("sb_publishable_"));
+}
+
 function getSupabaseAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (!isSupabaseConfigured() || !url || !serviceKey) {
+  if (!isSupabaseConfigured() || !url || !serviceKey || isPublishableServiceKey(serviceKey)) {
     return null;
   }
   return createSupabaseClient(url, serviceKey, {
@@ -109,6 +115,14 @@ export function isMissingTableError(error: { code?: string; message?: string } |
   if (error.code === "PGRST205" || error.code === "42P01") return true;
   const msg = error.message || "";
   return /schema cache|Could not find the table|relation .* does not exist/i.test(msg);
+}
+
+export function isSupabaseFallbackError(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) return false;
+  if (isMissingTableError(error)) return true;
+  if (error.code === "42501" || error.code === "PGRST301") return true;
+  const msg = error.message || "";
+  return /permission denied|Invalid API key|JWT|fetch failed|not allowed/i.test(msg);
 }
 
 const SAFE_DATA_IMAGE_RE = /^data:image\/(jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/i;
@@ -183,37 +197,65 @@ export function validateProductPayload(body: unknown): { ok: true; data: Product
 
 export async function getSupabaseSyncStatus(): Promise<SupabaseSyncStatus> {
   const configured = isSupabaseConfigured();
+  const rawServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const keyLooksPublishable = isPublishableServiceKey(rawServiceKey);
   const adminClient = getSupabaseAdminClient();
+  const publicClient = getSupabasePublicClient();
   const hasServiceRole = Boolean(adminClient);
   const localCount = getLocalStore().length;
 
   if (!configured) {
-    return { configured: false, hasServiceRole: false, tableReady: false, localCount };
+    return {
+      configured: false,
+      hasServiceRole: false,
+      tableReady: false,
+      localCount,
+      permissionDenied: false,
+      keyLooksPublishable: false,
+    };
   }
 
-  const client = adminClient || getSupabasePublicClient();
-  if (!client) {
-    return { configured, hasServiceRole, tableReady: false, localCount };
+  let tableReady = false;
+  let permissionDenied = false;
+
+  if (publicClient) {
+    try {
+      const { error } = await publicClient.from("products").select("id").limit(1);
+      if (!error || error.code === "42501") {
+        tableReady = true;
+      } else if (isMissingTableError(error)) {
+        tableReady = false;
+      }
+    } catch {
+      // Ignore network error
+    }
   }
 
-  try {
-    const { error } = await client
-      .from("products")
-      .select("id", { count: "exact", head: true });
-    if (!error) {
-      return { configured, hasServiceRole, tableReady: true, localCount };
+  if (adminClient) {
+    try {
+      const { error } = await adminClient.from("products").select("id").limit(1);
+      if (!error) {
+        tableReady = true;
+        permissionDenied = false;
+      } else if (error.code === "42501" || /permission denied|Invalid API key/i.test(error.message || "")) {
+        tableReady = true;
+        permissionDenied = true;
+      } else if (isMissingTableError(error)) {
+        tableReady = false;
+      }
+    } catch {
+      // Ignore network error
     }
-    if (error.code === "42501") {
-      return { configured, hasServiceRole, tableReady: true, localCount };
-    }
-    if (isMissingTableError(error)) {
-      return { configured, hasServiceRole, tableReady: false, localCount };
-    }
-  } catch {
-    // Fall through
   }
 
-  return { configured, hasServiceRole, tableReady: false, localCount };
+  return {
+    configured,
+    hasServiceRole,
+    tableReady,
+    localCount,
+    permissionDenied,
+    keyLooksPublishable,
+  };
 }
 
 export async function listAvailableProducts(): Promise<Product[]> {
@@ -282,7 +324,7 @@ export async function createProduct(input: ProductInput): Promise<{ data?: Produ
       if (!error) {
         return { data: data as Product };
       }
-      if (!isMissingTableError(error)) {
+      if (!isSupabaseFallbackError(error)) {
         return { error: error.message };
       }
     } catch {
@@ -316,7 +358,7 @@ export async function updateProduct(id: string, input: ProductInput): Promise<{ 
       if (!error) {
         return { data: data as Product };
       }
-      if (!isMissingTableError(error)) {
+      if (!isSupabaseFallbackError(error)) {
         return { error: error.message };
       }
     } catch {
@@ -355,7 +397,7 @@ export async function deleteProduct(id: string): Promise<{ error?: string }> {
       if (!error) {
         return {};
       }
-      if (!isMissingTableError(error)) {
+      if (!isSupabaseFallbackError(error)) {
         return { error: error.message };
       }
     } catch {

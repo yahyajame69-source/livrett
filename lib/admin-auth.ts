@@ -1,11 +1,16 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
 export const ADMIN_COOKIE_NAME = "lmdpl_admin_session";
-const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12 hours
+const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 60_000;
+
+const DATA_DIR = path.resolve(process.cwd(), ".data");
+const AUTH_HASH_FILE = path.resolve(DATA_DIR, "admin-auth.json");
 
 interface AuthStateStore {
   sessionSecret?: string;
@@ -17,11 +22,38 @@ const globalForAuth = globalThis as unknown as {
   __lmdplAuthStore?: AuthStateStore;
 };
 
+function readClaimedHashFromDisk(): string | undefined {
+  try {
+    if (!AUTH_HASH_FILE.startsWith(DATA_DIR + path.sep)) return undefined;
+    if (!fs.existsSync(AUTH_HASH_FILE)) return undefined;
+    const raw = fs.readFileSync(AUTH_HASH_FILE, "utf8");
+    const parsed = JSON.parse(raw) as { claimedCodeHash?: unknown };
+    return typeof parsed?.claimedCodeHash === "string" && parsed.claimedCodeHash.includes(":")
+      ? parsed.claimedCodeHash
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeClaimedHashToDisk(hash: string): void {
+  try {
+    if (!AUTH_HASH_FILE.startsWith(DATA_DIR + path.sep)) return;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(AUTH_HASH_FILE, JSON.stringify({ claimedCodeHash: hash }), "utf8");
+  } catch {
+    // Ignore read-only filesystem errors
+  }
+}
+
 function getStore(): AuthStateStore {
   if (!globalForAuth.__lmdplAuthStore) {
     globalForAuth.__lmdplAuthStore = {
+      claimedCodeHash: readClaimedHashFromDisk(),
       attempts: new Map(),
     };
+  } else if (!globalForAuth.__lmdplAuthStore.claimedCodeHash) {
+    globalForAuth.__lmdplAuthStore.claimedCodeHash = readClaimedHashFromDisk();
   }
   return globalForAuth.__lmdplAuthStore;
 }
@@ -84,7 +116,9 @@ export function claimInitialAdminCode(code: string): { ok: boolean; error?: stri
   if (getEnvAdminPasscode() !== null || store.claimedCodeHash) {
     return { ok: false, error: "Un code administrateur est déjà configuré." };
   }
-  store.claimedCodeHash = hashCodeScrypt(code);
+  const hash = hashCodeScrypt(code);
+  store.claimedCodeHash = hash;
+  writeClaimedHashToDisk(hash);
   return { ok: true };
 }
 
@@ -212,9 +246,13 @@ export function verifySameOriginRequest(req: NextRequest): boolean {
 
 export function buildSessionSetCookieHeader(req: NextRequest, token: string, maxAge = SESSION_TTL_SECONDS): string {
   const fwdProto = (req.headers.get("x-forwarded-proto") || "").toLowerCase();
+  const origin = (req.headers.get("origin") || "").toLowerCase();
+  const referer = (req.headers.get("referer") || "").toLowerCase();
   const isHttps =
     fwdProto.includes("https") ||
-    req.nextUrl.protocol === "https:";
+    req.nextUrl.protocol === "https:" ||
+    origin.startsWith("https://") ||
+    referer.startsWith("https://");
   const base = `${ADMIN_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${maxAge}; HttpOnly`;
   if (isHttps) {
     return `${base}; Secure; SameSite=None; Partitioned`;

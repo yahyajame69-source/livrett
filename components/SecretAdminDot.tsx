@@ -11,7 +11,7 @@ export default function SecretAdminDot() {
     const now = Date.now();
     if (now - lastTapRef.current <= 450) {
       lastTapRef.current = 0;
-      router.push("/connexion");
+      router.push("/admin");
     } else {
       lastTapRef.current = now;
     }

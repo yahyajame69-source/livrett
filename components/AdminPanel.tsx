@@ -34,8 +34,9 @@ const SETUP_SQL = `create table if not exists public.products (
   created_at timestamptz not null default now()
 );
 alter table public.products enable row level security;
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
 grant select on table public.products to anon, authenticated;
+grant all on table public.products to service_role;
 drop policy if exists "products_public_read_available" on public.products;
 create policy "products_public_read_available" on public.products
   for select to anon, authenticated using (is_available = true);
@@ -481,12 +482,15 @@ export default function AdminPanel({
 
   const showSqlHelper = Boolean(syncStatus?.configured && !syncStatus.tableReady);
   const showServiceRoleHelper = Boolean(
-    syncStatus?.configured && syncStatus.tableReady && !syncStatus.hasServiceRole
+    syncStatus?.configured &&
+      syncStatus.tableReady &&
+      (!syncStatus.hasServiceRole || syncStatus.permissionDenied || syncStatus.keyLooksPublishable)
   );
   const showPendingLocalSync = Boolean(
     syncStatus?.configured &&
       syncStatus.tableReady &&
       syncStatus.hasServiceRole &&
+      !syncStatus.permissionDenied &&
       syncStatus.localCount > 0
   );
 
@@ -554,7 +558,52 @@ export default function AdminPanel({
 
         {showServiceRoleHelper && (
           <div className="notice" style={{ marginTop: 18 }}>
-            <strong>Clé serveur <code>SUPABASE_SERVICE_ROLE_KEY</code> manquante :</strong> la table <code>public.products</code> existe bien sur Supabase, mais ajoutez <code>SUPABASE_SERVICE_ROLE_KEY</code> dans <strong>Paramètres → Secrets</strong> (ou <code>.env.local</code>) pour que l'administration écrive directement dans Supabase (en attendant, vos ajouts sont sauvegardés localement).
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+              <Database size={18} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
+              <div style={{ flex: 1 }}>
+                <strong>
+                  {syncStatus?.keyLooksPublishable
+                    ? "Clé publique détectée dans SUPABASE_SERVICE_ROLE_KEY"
+                    : syncStatus?.permissionDenied
+                    ? "Autorisation d'écriture Supabase à finaliser"
+                    : "Clé serveur SUPABASE_SERVICE_ROLE_KEY manquante"}
+                </strong>
+                <p style={{ margin: "6px 0 12px", lineHeight: 1.5 }}>
+                  {syncStatus?.keyLooksPublishable
+                    ? "Vous avez saisi une clé publique (sb_publishable_...) dans SUPABASE_SERVICE_ROLE_KEY. Remplacez-la dans Settings → Secrets par votre clé secrète (sb_secret_... ou service_role). En attendant, vos livres sont sauvegardés sans erreur sur le serveur."
+                    : syncStatus?.permissionDenied
+                    ? "La table public.products existe bien, mais Supabase refuse l'écriture pour la clé configurée. Vérifiez que SUPABASE_SERVICE_ROLE_KEY dans Settings → Secrets correspond à votre clé sb_secret_... et exécutez le script d'autorisation ci-dessous dans Supabase → SQL Editor → Run."
+                    : "La table public.products existe bien sur Supabase, mais ajoutez SUPABASE_SERVICE_ROLE_KEY dans Paramètres → Secrets pour que l'administration écrive directement dans Supabase (en attendant, vos ajouts sont sauvegardés localement)."}
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="btn outline"
+                    style={{ padding: "8px 14px", fontSize: 12 }}
+                    onClick={copySetupSql}
+                  >
+                    {copiedSql ? <Check size={14} style={{ marginRight: 6 }} /> : <Copy size={14} style={{ marginRight: 6 }} />}
+                    {copiedSql ? "Script SQL copié" : "Copier le script SQL"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    style={{ padding: "8px 14px", fontSize: 12 }}
+                    disabled={syncing}
+                    onClick={syncToSupabase}
+                  >
+                    <RefreshCw size={14} style={{ marginRight: 6 }} />
+                    {syncing ? "Vérification…" : "Vérifier et synchroniser"}
+                  </button>
+                </div>
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ cursor: "pointer", fontWeight: 600 }}>
+                    Afficher le script SQL
+                  </summary>
+                  <pre className="sqlPreview">{SETUP_SQL}</pre>
+                </details>
+              </div>
+            </div>
           </div>
         )}
 
