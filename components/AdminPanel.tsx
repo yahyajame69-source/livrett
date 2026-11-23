@@ -26,6 +26,8 @@ const SETUP_SQL = `create table if not exists public.products (
   created_at timestamptz not null default now()
 );
 alter table public.products enable row level security;
+grant usage on schema public to anon, authenticated;
+grant select on table public.products to anon, authenticated;
 drop policy if exists "products_public_read_available" on public.products;
 create policy "products_public_read_available" on public.products
   for select to anon, authenticated using (is_available = true);
@@ -343,6 +345,12 @@ export default function AdminPanel({
   const showServiceRoleHelper = Boolean(
     syncStatus?.configured && syncStatus.tableReady && !syncStatus.hasServiceRole
   );
+  const showPendingLocalSync = Boolean(
+    syncStatus?.configured &&
+      syncStatus.tableReady &&
+      syncStatus.hasServiceRole &&
+      syncStatus.localCount > 0
+  );
 
   return (
     <main className="admin">
@@ -370,7 +378,7 @@ export default function AdminPanel({
             <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <Database size={18} style={{ flexShrink: 0, marginTop: 2 }} aria-hidden="true" />
               <div style={{ flex: 1 }}>
-                <strong>Table Supabase `public.products` en attente de création</strong>
+                <strong>Table Supabase <code>public.products</code> en attente de création</strong>
                 <p style={{ margin: "6px 0 12px", lineHeight: 1.5 }}>
                   Vos livres sont enregistrés localement sur le serveur et s'affichent déjà sur la boutique sans erreur. Pour activer la synchronisation Supabase, exécutez ce script dans <strong>Supabase → SQL Editor → Run</strong>, puis cliquez sur <strong>Vérifier et synchroniser</strong>.
                 </p>
@@ -408,7 +416,25 @@ export default function AdminPanel({
 
         {showServiceRoleHelper && (
           <div className="notice" style={{ marginTop: 18 }}>
-            <strong>Clé serveur `SUPABASE_SERVICE_ROLE_KEY` manquante :</strong> la table `public.products` est bien prête, mais ajoutez `SUPABASE_SERVICE_ROLE_KEY` dans vos Secrets pour que l'administration écrive directement dans Supabase (en attendant, vos ajouts sont sauvegardés localement).
+            <strong>Clé serveur <code>SUPABASE_SERVICE_ROLE_KEY</code> manquante :</strong> la table <code>public.products</code> existe bien sur Supabase, mais ajoutez <code>SUPABASE_SERVICE_ROLE_KEY</code> dans <strong>Paramètres → Secrets</strong> (ou <code>.env.local</code>) pour que l'administration écrive directement dans Supabase (en attendant, vos ajouts sont sauvegardés localement).
+          </div>
+        )}
+
+        {showPendingLocalSync && (
+          <div className="notice" style={{ marginTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div>
+              <strong>Connexion Supabase prête :</strong> {syncStatus?.localCount} livre(s) enregistré(s) localement peuvent être transférés vers Supabase.
+            </div>
+            <button
+              type="button"
+              className="btn"
+              style={{ padding: "8px 14px", fontSize: 12 }}
+              disabled={syncing}
+              onClick={syncToSupabase}
+            >
+              <RefreshCw size={14} style={{ marginRight: 6 }} />
+              {syncing ? "Synchronisation…" : "Synchroniser vers Supabase"}
+            </button>
           </div>
         )}
 

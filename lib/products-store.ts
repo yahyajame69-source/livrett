@@ -203,6 +203,9 @@ export async function getSupabaseSyncStatus(): Promise<SupabaseSyncStatus> {
     if (!error) {
       return { configured, hasServiceRole, tableReady: true, localCount };
     }
+    if (error.code === "42501") {
+      return { configured, hasServiceRole, tableReady: true, localCount };
+    }
     if (isMissingTableError(error)) {
       return { configured, hasServiceRole, tableReady: false, localCount };
     }
