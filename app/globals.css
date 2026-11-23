@@ -27,6 +27,7 @@
 .backLink:hover{text-decoration:underline}
 .adminTopbar{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;padding:20px 24px;background:#fff;border:1px solid #e7eaf0;border-radius:16px;box-shadow:0 10px 30px #1727440b}
 .errorBox{display:flex;align-items:flex-start;gap:8px;padding:12px 14px;border-radius:10px;background:#fef2f2;border:1px solid #fecaca;color:#991b1b;font-size:13px;line-height:1.5}
+.successBox{padding:12px 14px;border-radius:10px;background:#ecfdf5;border:1px solid #bbf7d0;color:#166534;font-size:13px;line-height:1.5}
 .errorBox svg{flex-shrink:0;margin-top:2px}
 .pinLabel{font-size:13px;font-weight:700;margin-bottom:8px}
 .pinGrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
